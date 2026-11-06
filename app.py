@@ -1,12 +1,14 @@
 
 import streamlit as st
 from pathlib import Path
+
 from rag_pipeline import ask_bot
 from config import CORPUS_DIR
 
-# ==================================================
-# 1. PAGE CONFIGURATION
-# ==================================================
+
+# ==========================================
+# PAGE CONFIGURATION
+# ==========================================
 
 st.set_page_config(
     page_title="Zyro Dynamics HR Assistant",
@@ -14,116 +16,192 @@ st.set_page_config(
     layout="wide"
 )
 
-# ==================================================
-# 2. CUSTOM CSS
-# ==================================================
 
-st.markdown("""
-<style>
-.main-title {
-    text-align: center;
-    color: #3B82F6;
-    font-size: 34px;
-    font-weight: bold;
-}
-.subtitle {
-    text-align: center;
-    color: #94A3B8;
-    font-size: 16px;
-}
-</style>
-""", unsafe_allow_html=True)
+# ==========================================
+# CUSTOM CSS
+# ==========================================
+
+st.markdown(
+    """
+    <style>
+        .main-title {
+            text-align: center;
+            color: #2563eb;
+            font-size: 36px;
+            font-weight: bold;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: gray;
+            font-size: 15px;
+        }
+
+        .feature-text {
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+
+        .source-heading {
+            font-weight: bold;
+            font-size: 15px;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 
-# ==================================================
-# 3. SOURCE PDF HELPER
-# ==================================================
+# ==========================================
+# FIND ORIGINAL SOURCE PDF
+# ==========================================
 
 def find_source_pdf(source_path):
-    from pathlib import Path
+    """
+    Locate the original PDF inside the corpus directory.
 
-    # Convert Windows path separators to Linux-compatible separators
+    Supports both Windows and Linux file paths.
+    """
+
+    # Extract filename regardless of path separator
     filename = str(source_path).replace("\\", "/").split("/")[-1]
 
-    # Search for the matching PDF in the corpus folder
-    for pdf_path in CORPUS_DIR.rglob("*.pdf"):
-        if pdf_path.name.lower() == filename.lower():
+    # Check that the corpus directory exists
+    if not CORPUS_DIR.exists():
+        return None
+
+    # Search recursively for the matching PDF
+    for pdf_path in CORPUS_DIR.rglob("*"):
+        if (
+            pdf_path.is_file()
+            and pdf_path.suffix.lower() == ".pdf"
+            and pdf_path.name.lower() == filename.lower()
+        ):
             return pdf_path
 
     return None
-    from pathlib import Path
 
-    filename = Path(source_path).name
 
-    for pdf_path in CORPUS_DIR.rglob("*.pdf"):
-        if pdf_path.name == filename:
-            return pdf_path
-
-    return None
-    """
-    Locate the original PDF inside the corpus folder.
-    Works even if the stored metadata contains an
-    older absolute Windows path.
-    """
-
-    filename = Path(source_path).name
-
-    matches = list(CORPUS_DIR.rglob(filename))
-
-    if matches:
-        return matches[0]
-
-    return None
-
+# ==========================================
+# DISPLAY SOURCE DOCUMENTS
+# ==========================================
 
 def display_sources(sources, message_index):
-    """
-    Display source filenames, page numbers,
-    and downloadable original PDF files.
-    """
 
     if not sources:
         return
 
-    with st.expander("📚 View source documents"):
+    with st.expander("📚 View source documents", expanded=False):
 
-        for source_index, source in enumerate(sources):
+        for source_index, doc in enumerate(sources):
 
-            source_path = source.get("file", "")
-            page = source.get("page", "Unknown")
+            metadata = doc.metadata
 
-            pdf_path = find_source_pdf(source_path)
+            source_path = metadata.get("source", "Unknown document")
+
+            filename = str(source_path).replace("\\", "/").split("/")[-1]
+
+            # PyPDFLoader page numbers are zero-indexed
+            page_number = metadata.get("page")
+
+            if page_number is not None:
+                page_number = int(page_number) + 1
 
             st.markdown(
-                f"**📄 {Path(source_path).name}**"
+                f"**📄 {filename}**"
             )
 
-            st.caption(f"Relevant page: {page}")
+            if page_number is not None:
+                st.caption(f"Relevant page: {page_number}")
 
-            if pdf_path and pdf_path.is_file():
+            # Locate the original PDF
+            pdf_file = find_source_pdf(source_path)
 
-                with open(pdf_path, "rb") as pdf_file:
-                    pdf_bytes = pdf_file.read()
+            if pdf_file is not None:
 
-                st.download_button(
-                    label="⬇️ Open / Download source PDF",
-                    data=pdf_bytes,
-                    file_name=pdf_path.name,
-                    mime="application/pdf",
-                    key=f"download_{message_index}_{source_index}"
-                )
+                try:
+                    with open(pdf_file, "rb") as file:
+                        pdf_bytes = file.read()
+
+                    st.download_button(
+                        label="⬇️ Download original PDF",
+                        data=pdf_bytes,
+                        file_name=pdf_file.name,
+                        mime="application/pdf",
+                        key=f"download_{message_index}_{source_index}"
+                    )
+
+                except OSError:
+                    st.warning("Unable to read the original PDF.")
 
             else:
-                st.warning(
-                    "Original PDF could not be located."
-                )
+                st.warning("Original PDF could not be located.")
 
-            st.divider()
+            if source_index < len(sources) - 1:
+                st.divider()
 
 
-# ==================================================
-# 4. HEADER
-# ==================================================
+# ==========================================
+# SIDEBAR
+# ==========================================
+
+with st.sidebar:
+
+    st.markdown("## 🏢 Zyro Dynamics")
+
+    st.caption("HR Assistant Dashboard")
+
+    st.divider()
+
+    st.markdown("### About")
+
+    st.write(
+        """
+        An intelligent HR assistant powered by
+        Retrieval-Augmented Generation (RAG).
+
+        It retrieves relevant information from
+        company policy documents and generates
+        answers using an LLM.
+        """
+    )
+
+    st.divider()
+
+    st.markdown("### Features")
+
+    st.markdown(
+        """
+        <div class="feature-text">📚 HR document retrieval</div>
+        <div class="feature-text">🧠 AI-powered responses</div>
+        <div class="feature-text">🛡️ HR scope guardrail</div>
+        <div class="feature-text">📄 Source PDF references</div>
+        <div class="feature-text">🔍 Original document access</div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.divider()
+
+    # Count available PDF documents
+    if CORPUS_DIR.exists():
+        pdf_count = sum(
+            1 for file in CORPUS_DIR.rglob("*")
+            if file.is_file() and file.suffix.lower() == ".pdf"
+        )
+    else:
+        pdf_count = 0
+
+    st.caption(f"Available PDF documents: {pdf_count}")
+
+    if st.button("🗑️ Clear Chat", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
+
+
+# ==========================================
+# MAIN CHAT INTERFACE
+# ==========================================
 
 st.markdown(
     '<div class="main-title">🤖 Zyro Dynamics</div>',
@@ -137,150 +215,93 @@ st.markdown(
 
 st.divider()
 
-st.info(
-    "Ask questions about Zyro Dynamics HR policies, "
-    "leave, travel, reimbursements, benefits, and "
-    "company guidelines."
-)
 
-
-# ==================================================
-# 5. SESSION STATE
-# ==================================================
+# ==========================================
+# INITIALIZE CHAT HISTORY
+# ==========================================
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 
-# ==================================================
-# 6. DISPLAY CHAT HISTORY
-# ==================================================
+# ==========================================
+# DISPLAY PREVIOUS CHAT MESSAGES
+# ==========================================
 
-for message_index, message in enumerate(
-    st.session_state.messages
-):
+for message_index, message in enumerate(st.session_state.messages):
 
     with st.chat_message(message["role"]):
 
         st.markdown(message["content"])
 
+        # Display sources for assistant messages
         if message["role"] == "assistant":
+
             display_sources(
                 message.get("sources", []),
                 message_index
             )
 
 
-# ==================================================
-# 7. CHAT INPUT
-# ==================================================
+# ==========================================
+# USER INPUT AND RESPONSE GENERATION
+# ==========================================
 
-question = st.chat_input(
-    "Ask your HR question here..."
-)
+question = st.chat_input("Ask your HR question here...")
 
 if question:
 
     # Display user question
-    st.session_state.messages.append({
-        "role": "user",
-        "content": question
-    })
-
     with st.chat_message("user"):
         st.markdown(question)
+
+    # Save user question
+    st.session_state.messages.append(
+        {
+            "role": "user",
+            "content": question
+        }
+    )
 
     # Generate assistant response
     with st.chat_message("assistant"):
 
-        with st.spinner("Searching HR policies..."):
+        with st.spinner("Searching HR documents..."):
 
             try:
 
                 result = ask_bot(question)
 
-                answer = result["answer"]
+                answer = result.get(
+                    "answer",
+                    "Sorry, I could not generate an answer."
+                )
 
-                # Extract source metadata
+                sources = result.get("sources", [])
+
+            except Exception as error:
+
+                answer = (
+                    "Something went wrong while processing "
+                    "your question. Please try again."
+                )
+
                 sources = []
 
-                for doc in result["sources"]:
+                st.error(f"Application error: {error}")
 
-                    sources.append({
-                        "file": doc.metadata.get(
-                            "source", "Unknown"
-                        ),
-                        "page": doc.metadata.get(
-                            "page", "Unknown"
-                        )
-                    })
+        st.markdown(answer)
 
-                # Display answer
-                st.markdown(answer)
+        display_sources(
+            sources,
+            len(st.session_state.messages)
+        )
 
-                # Display source documents
-                display_sources(
-                    sources,
-                    len(st.session_state.messages)
-                )
-
-                # Save assistant response
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": answer,
-                    "sources": sources
-                })
-
-            except Exception as e:
-
-                st.error(
-                    f"Something went wrong: {str(e)}"
-                )
-
-
-# ==================================================
-# 8. SIDEBAR
-# ==================================================
-
-with st.sidebar:
-
-    st.title("Zyro Dynamics")
-
-    st.caption("HR Assistant Dashboard")
-
-    st.divider()
-
-    st.subheader("About")
-
-    st.write(
-        "An intelligent HR assistant powered by "
-        "Retrieval-Augmented Generation (RAG). "
-        "It retrieves information from company "
-        "policy documents and generates answers "
-        "using an LLM."
+    # Save assistant response and sources
+    st.session_state.messages.append(
+        {
+            "role": "assistant",
+            "content": answer,
+            "sources": sources
+        }
     )
-
-    st.divider()
-
-    st.subheader("Features")
-
-    st.write("📚 HR document retrieval")
-    st.write("🧠 AI-powered responses")
-    st.write("🛡️ HR scope guardrail")
-    st.write("📄 Source PDF references")
-    st.write("🔍 Original document access")
-
-    st.divider()
-
-    st.caption(
-        f"Available PDF documents: "
-        f"{len(list(CORPUS_DIR.rglob('*.pdf')))}"
-    )
-
-    if st.button(
-        "🗑️ Clear Chat",
-        use_container_width=True
-    ):
-
-        st.session_state.messages = []
-        st.rerun()
