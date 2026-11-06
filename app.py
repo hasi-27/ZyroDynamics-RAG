@@ -40,6 +40,15 @@ st.markdown("""
 # ==================================================
 
 def find_source_pdf(source_path):
+    from pathlib import Path
+
+    filename = Path(source_path).name
+
+    for pdf_path in CORPUS_DIR.rglob("*.pdf"):
+        if pdf_path.name == filename:
+            return pdf_path
+
+    return None
     """
     Locate the original PDF inside the corpus folder.
     Works even if the stored metadata contains an
