@@ -22,15 +22,29 @@ from config import (
 # 1. LOAD ENVIRONMENT VARIABLES
 # ==================================================
 
+
 load_dotenv()
 
+import streamlit as st
+
+# Read API key locally or from Streamlit Cloud secrets
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+if not GROQ_API_KEY:
+    try:
+        GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
+    except (KeyError, FileNotFoundError):
+        GROQ_API_KEY = None
 
 if not GROQ_API_KEY:
     raise ValueError(
         "GROQ_API_KEY not found. "
-        "Please add your API key to the .env file."
+        "Configure it in .env or Streamlit Secrets."
     )
+
+# Make the key available to ChatGroq
+os.environ["GROQ_API_KEY"] = GROQ_API_KEY
+
 
 
 # ==================================================
