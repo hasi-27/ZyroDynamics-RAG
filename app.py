@@ -42,6 +42,17 @@ st.markdown("""
 def find_source_pdf(source_path):
     from pathlib import Path
 
+    # Convert Windows path separators to Linux-compatible separators
+    filename = str(source_path).replace("\\", "/").split("/")[-1]
+
+    # Search for the matching PDF in the corpus folder
+    for pdf_path in CORPUS_DIR.rglob("*.pdf"):
+        if pdf_path.name.lower() == filename.lower():
+            return pdf_path
+
+    return None
+    from pathlib import Path
+
     filename = Path(source_path).name
 
     for pdf_path in CORPUS_DIR.rglob("*.pdf"):
